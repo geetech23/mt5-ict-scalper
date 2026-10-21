@@ -29,6 +29,32 @@ Copy `.env.example` to `.env` to configure manually (`.env` is gitignored; never
 | `dashboard/` | Flask dashboard (`/api/state` JSON + responsive UI) |
 | `journal.py`, `utils/` | CSV journal (`logs/trade_journal.csv`), rotating logs (`logs/bot.log`), helpers |
 
+## TradeLocker
+
+`brokers/tradelocker_connector.py` wraps the official [`tradelocker`](https://pypi.org/project/tradelocker/) package.
+
+**Setup** – in `.env` (or via the `python main.py` wizard):
+```
+BROKER=tradelocker
+TL_ENVIRONMENT=demo        # demo | live
+TL_EMAIL=...               # your TradeLocker login
+TL_PASSWORD=...
+TL_SERVER=...              # server name shown by your broker
+TL_ACC_NUM=0               # account number if you have several (0 = first)
+SIMULATION_MODE=true       # true = paper trade on real TradeLocker prices, no orders sent
+```
+Set `SIMULATION_MODE=false` to place real orders (on the demo or live account chosen by `TL_ENVIRONMENT`).
+
+**What the connector does**
+- Authenticates with your credentials and reconnects automatically (a failed call triggers a reconnect and is then reported as an error).
+- Resolves symbol -> instrument ID once and caches it.
+- Fetches candles (M1-D1) and bid/ask quotes by polling REST; WebSocket streaming is not implemented.
+- Reads account balance/equity and open positions.
+- Places market orders with absolute SL/TP, modifies SL/TP (used for breakeven and trailing), and closes positions.
+- Pip size / pip value use built-in defaults (FX, JPY pairs, XAU, XAG), not broker data - check lot sizing for your instruments.
+
+**Recommended path:** simulation with credentials -> demo with `SIMULATION_MODE=false` -> live.
+
 ## Risk rules
 Position size from equity × `RISK_PER_TRADE_PCT` × `POSITION_SIZE_MULTIPLIER`; minimum RR 1:2 enforced;
 daily loss circuit breaker; max consecutive losses; max trades per session; breakeven and trailing stops.
