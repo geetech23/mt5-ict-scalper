@@ -71,6 +71,10 @@ class TradingBot:
             if time.time() - self._last_scan.get(symbol, 0) < self._tf_seconds:
                 continue
             self._last_scan[symbol] = time.time()
+            trading_ok, why = self.risk.can_trade()
+            if not trading_ok and self.risk.state.value == "COOLDOWN":
+                log.info("⏸ %s: %s - skipping new entries", symbol, why)
+                continue
             analysis, sig = self.strategy.scan(symbol)
             with self._lock:
                 self._analyses[symbol], self._signals[symbol] = analysis, sig
@@ -91,6 +95,11 @@ class TradingBot:
                 "journal": self.journal.recent_trades(20),
                 "risk": {"daily_pnl": round(self.risk.daily_pnl, 2),
                          "consecutive_losses": self.risk.consecutive_losses,
+                         "mode": self.risk.state.value,
+                         "risk_pct": round(self.risk.current_risk_pct(), 2),
+                         "peak_equity": self.risk.peak_equity,
+                         "cooldown_until": (self.risk.cooldown_until.isoformat(timespec="seconds")
+                                            if self.risk.cooldown_until else None),
                          "trading_allowed": trading_ok, "reason": why}}
 
     @staticmethod

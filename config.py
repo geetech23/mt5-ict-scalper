@@ -72,14 +72,31 @@ class Config:
     session_hours: Dict[str, tuple] = field(default_factory=dict)
     session_symbols: Dict[str, List[str]] = field(default_factory=dict)
     # Risk
-    risk_per_trade_pct: float = 10.0
+    risk_per_trade_pct: float = 1.0  # base (tier 0) risk per trade
     position_size_multiplier: float = 1.0
     min_rr: float = 2.0
-    daily_loss_limit_pct: float = 5.0
-    max_consecutive_losses: int = 3
+    daily_loss_limit_pct: float = 3.0  # hard daily stop (% of day-start equity)
+    max_consecutive_losses: int = 3  # losses before cooldown
     max_trades_per_session: int = 5
     breakeven_r: float = 1.0
     trailing_r: float = 1.5
+    # Adaptive compounding / dynamic risk (see risk_manager.py)
+    adaptive_risk_enabled: bool = True
+    daily_profit_target_pct: float = 15.0  # stop opening new trades at/above this realized growth
+    risk_tier1_growth_pct: float = 5.0  # growth at which tier-1 risk applies
+    risk_tier1_pct: float = 1.25
+    risk_tier2_growth_pct: float = 10.0
+    risk_tier2_pct: float = 1.5
+    max_risk_per_trade_pct: float = 1.5  # cap on normal-mode risk
+    reduced_risk_pct: float = 0.5  # REDUCED mode / post-cooldown risk
+    drawdown_protection_pct: float = 2.0  # drop from daily peak equity that triggers REDUCED
+    max_aggregate_risk_pct: float = 3.0  # cap on summed risk of all open positions
+    cooldown_minutes: int = 30
+    recovery_minutes: int = 30  # min time in REDUCED before risk may escalate again
+    recovery_wins: int = 2  # winning trades required in REDUCED before escalating
+    perf_window_trades: int = 10  # recent-trade window for performance gates
+    perf_min_trades: int = 3  # min closed trades today before risk may escalate
+    perf_min_win_rate: float = 0.5  # win rate must exceed this to escalate
     # ICT
     swing_lookback: int = 3
     fvg_min_pips: float = 1.0
@@ -118,14 +135,30 @@ class Config:
             enabled_sessions=_list("ENABLED_SESSIONS", "LONDON,NY,ASIA"),
             session_hours=hours,
             session_symbols=session_symbols,
-            risk_per_trade_pct=_float("RISK_PER_TRADE_PCT", 10.0),
+            risk_per_trade_pct=_float("RISK_PER_TRADE_PCT", 1.0),
             position_size_multiplier=_float("POSITION_SIZE_MULTIPLIER", 1.0),
             min_rr=_float("MIN_RR", 2.0),
-            daily_loss_limit_pct=_float("DAILY_LOSS_LIMIT_PCT", 5.0),
+            daily_loss_limit_pct=_float("DAILY_LOSS_LIMIT_PCT", 3.0),
             max_consecutive_losses=_int("MAX_CONSECUTIVE_LOSSES", 3),
             max_trades_per_session=_int("MAX_TRADES_PER_SESSION", 5),
             breakeven_r=_float("BREAKEVEN_R", 1.0),
             trailing_r=_float("TRAILING_R", 1.5),
+            adaptive_risk_enabled=_bool("ADAPTIVE_RISK_ENABLED", True),
+            daily_profit_target_pct=_float("DAILY_PROFIT_TARGET_PCT", 15.0),
+            risk_tier1_growth_pct=_float("RISK_TIER1_GROWTH_PCT", 5.0),
+            risk_tier1_pct=_float("RISK_TIER1_PCT", 1.25),
+            risk_tier2_growth_pct=_float("RISK_TIER2_GROWTH_PCT", 10.0),
+            risk_tier2_pct=_float("RISK_TIER2_PCT", 1.5),
+            max_risk_per_trade_pct=_float("MAX_RISK_PER_TRADE_PCT", 1.5),
+            reduced_risk_pct=_float("REDUCED_RISK_PCT", 0.5),
+            drawdown_protection_pct=_float("DRAWDOWN_PROTECTION_PCT", 2.0),
+            max_aggregate_risk_pct=_float("MAX_AGGREGATE_RISK_PCT", 3.0),
+            cooldown_minutes=_int("COOLDOWN_MINUTES", 30),
+            recovery_minutes=_int("RECOVERY_MINUTES", 30),
+            recovery_wins=_int("RECOVERY_WINS", 2),
+            perf_window_trades=_int("PERF_WINDOW_TRADES", 10),
+            perf_min_trades=_int("PERF_MIN_TRADES", 3),
+            perf_min_win_rate=_float("PERF_MIN_WIN_RATE", 0.5),
             swing_lookback=_int("SWING_LOOKBACK", 3),
             fvg_min_pips=_float("FVG_MIN_PIPS", 1.0),
             ob_impulse_atr=_float("OB_IMPULSE_ATR", 1.5),

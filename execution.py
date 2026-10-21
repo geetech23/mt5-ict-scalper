@@ -59,6 +59,7 @@ class ExecutionEngine:
         if not pid:
             log.error("❌ Order rejected for %s", sig.symbol)
             return None
+        self.risk.register_open(pid, self.risk.last_risk_pct)
         reason = "; ".join(sig.reasons)
         self.meta[pid] = TradeMeta(sig.symbol, sig.side, sig.entry, sig.sl, sig.tp, reason)
         if session_key:
@@ -102,6 +103,7 @@ class ExecutionEngine:
     def _on_closed(self, pid: str, m: TradeMeta) -> None:
         res = self.conn.closed_result(pid)
         exit_price, pnl = res if res else (m.last_price, m.last_profit)
+        self.risk.release(pid)
         self.risk.record_trade(pnl)
         reason = "TP/SL hit" if res else "closed (last known)"
         self.journal.record("CLOSE", m.symbol, m.side, m.entry, m.initial_sl, m.tp,

@@ -59,6 +59,17 @@ Set `SIMULATION_MODE=false` to place real orders (on the demo or live account ch
 Position size from equity × `RISK_PER_TRADE_PCT` × `POSITION_SIZE_MULTIPLIER`; minimum RR 1:2 enforced;
 daily loss circuit breaker; max consecutive losses; max trades per session; breakeven and trailing stops.
 
+### Adaptive compounding (risk_manager.py, all values in `.env.example`)
+- Modes: **NORMAL** (1.0% -> 1.25% at +5% realized daily growth -> 1.5% at +10%, only when recent win rate > 50%,
+  expectancy > 0 and drawdown is small), **REDUCED** (0.5%, after a 2% drop from the daily peak equity; needs
+  `RECOVERY_MINUTES` and `RECOVERY_WINS` before returning to NORMAL), **COOLDOWN** (no new entries for 30 min after
+  3 consecutive losses; then trading resumes automatically in REDUCED mode).
+- No new trades at +15% daily growth (target) or -3% daily loss (hard stop incl. floating P&L; overrides everything).
+- Open positions' risk is summed and capped by `MAX_AGGREGATE_RISK_PCT`.
+- Growth uses realized P&L vs day-start equity (UTC day). State is in memory: after a restart the day baseline resets.
+- Backtesting: `python backtest.py --symbol EURUSD --bars 3000` (the backtester sizes with the base tier and keeps its
+  own simple daily halt); validate on a demo account (`SIMULATION_MODE=false`) before going live.
+
 ## Tests
 ```bash
 python -m pytest
