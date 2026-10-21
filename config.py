@@ -72,7 +72,7 @@ class Config:
     session_hours: Dict[str, tuple] = field(default_factory=dict)
     session_symbols: Dict[str, List[str]] = field(default_factory=dict)
     # Risk
-    risk_per_trade_pct: float = 1.0
+    risk_per_trade_pct: float = 10.0
     position_size_multiplier: float = 1.0
     min_rr: float = 2.0
     daily_loss_limit_pct: float = 5.0
@@ -118,7 +118,7 @@ class Config:
             enabled_sessions=_list("ENABLED_SESSIONS", "LONDON,NY,ASIA"),
             session_hours=hours,
             session_symbols=session_symbols,
-            risk_per_trade_pct=_float("RISK_PER_TRADE_PCT", 1.0),
+            risk_per_trade_pct=_float("RISK_PER_TRADE_PCT", 10.0),
             position_size_multiplier=_float("POSITION_SIZE_MULTIPLIER", 1.0),
             min_rr=_float("MIN_RR", 2.0),
             daily_loss_limit_pct=_float("DAILY_LOSS_LIMIT_PCT", 5.0),
