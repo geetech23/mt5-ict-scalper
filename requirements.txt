@@ -1,0 +1,5 @@
+flask>=3.0
+requests>=2.31
+tradelocker>=0.40; python_version >= "3.9"
+# Optional (Windows only): MetaTrader5>=5.0.45
+pytest>=8.0
