@@ -30,6 +30,39 @@ class ICTAnalyzer:
                for p, c in zip(candles[start - 1:end - 1], candles[start:end])]
         return sum(trs) / len(trs) if trs else 0.0
 
+    def atr_ratio(self, candles: Sequence[Candle], avg_period: int = 20) -> float:
+        """Current ATR divided by the mean of the previous `avg_period` ATR readings."""
+        n = len(candles)
+        if n < avg_period + self.atr_period + 1:
+            return 1.0  # not enough history: do not filter
+        hist = [self.atr(candles, n - j) for j in range(1, avg_period + 1)]
+        avg = sum(hist) / len(hist)
+        return self.atr(candles) / avg if avg > 0 else 1.0
+
+    def is_consolidating(self, candles: Sequence[Candle], bars: int = 10,
+                         min_range_pips: float = 10.0) -> bool:
+        """True when the last `bars` candles fit inside less than `min_range_pips`."""
+        recent = candles[-bars:]
+        if len(recent) < bars:
+            return False
+        rng = max(c.high for c in recent) - min(c.low for c in recent)
+        return rng < min_range_pips * self.pip
+
+    @staticmethod
+    def body_ratio(c: Candle) -> float:
+        rng = c.high - c.low
+        return c.body / rng if rng > 0 else 0.0
+
+    @staticmethod
+    def is_indecision(c: Candle) -> bool:
+        """Doji or hammer/shooting-star style candle (small body with a dominant wick)."""
+        rng = c.high - c.low
+        if rng <= 0:
+            return True
+        body = c.body
+        wick = max(c.high - max(c.open, c.close), min(c.open, c.close) - c.low)
+        return body / rng < 0.1 or wick > 2 * body and body / rng < 0.35
+
     # ---- swings / structure ----------------------------------------------------------
     def find_swings(self, candles: Sequence[Candle]) -> List[SwingPoint]:
         """Confirmed swing points (need `lookback` candles on each side), labelled HH/HL/LH/LL."""

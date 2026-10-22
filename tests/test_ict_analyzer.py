@@ -76,3 +76,43 @@ def test_signal_enforces_min_rr_and_confluence():
         assert sig.rr >= 2.0
         assert (sig.side == "buy" and sig.sl < sig.entry < sig.tp) or (sig.side == "sell" and sig.tp < sig.entry < sig.sl)
     assert SignalGenerator(min_confluence=10).generate(c, analysis) is None
+
+
+def _scalp_cfg(**kw):
+    from config import Config
+    return Config(scalp_mode=True, **kw)
+
+
+def test_market_condition_helpers():
+    a = ICTAnalyzer()
+    assert a.is_consolidating(mk(flat(10)), 10, 15)  # 10-pip range < 15
+    assert not a.is_consolidating(mk(flat(10)), 10, 5)
+    assert a.atr_ratio(mk(flat(10))) == 1.0  # too little history: no filter
+    assert ICTAnalyzer.is_indecision(Candle(T0, 1.1, 1.1010, 1.0990, 1.1001))
+    assert not ICTAnalyzer.is_indecision(Candle(T0, 1.1, 1.1010, 1.0999, 1.1009))
+    assert ICTAnalyzer.body_ratio(Candle(T0, 1.1, 1.1010, 1.1, 1.1008)) > 0.7
+
+
+def test_scalp_rejects_without_htf_and_in_chop():
+    from ict.signals import ScalpSignalGenerator
+    c = mk(flat(40))
+    an = ICTAnalyzer(swing_lookback=2).analyze(c, "EURUSD")
+    gen = ScalpSignalGenerator(_scalp_cfg())
+    assert gen.generate(c, an) is None and "consolidating" in gen.last_rejection
+    rows = flat(25) + [(1.1000, 1.1002, 1.0975, 1.0980), (1.0980, 1.1050, 1.0978, 1.1045),
+                       (1.1045, 1.1048, 1.1004, 1.1006)]
+    c = mk(rows)
+    an = ICTAnalyzer(swing_lookback=2).analyze(c, "EURUSD")
+    assert gen.generate(c, an, Direction.NEUTRAL) is None
+    assert gen.generate(c, an, None) is None
+
+
+def test_scalp_rr_limits_in_risk_manager():
+    from risk_manager import RiskManager
+    rm = RiskManager(_scalp_cfg())
+    assert rm.check_rr(1.1, 1.099, 1.1015)       # 1.5R ok
+    assert not rm.check_rr(1.1, 1.099, 1.1050)   # 5R too greedy
+    assert not rm.check_rr(1.1, 1.099, 1.1012)   # 1.2R too low
+    from brokers.base_connector import SymbolSpec
+    assert rm.split_lots(0.10, SymbolSpec()) == (0.05, 0.05)
+    assert rm.split_lots(0.01, SymbolSpec()) == (0.01, 0.0)

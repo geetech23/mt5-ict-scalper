@@ -138,6 +138,8 @@ class Signal:
     confluence: int
     reasons: List[str]
     time: Optional[datetime] = None
+    tp1: Optional[float] = None  # first (partial) take-profit, scalp mode only
+    score: float = 0.0
 
     @property
     def risk(self) -> float:
@@ -150,4 +152,4 @@ class Signal:
     def to_dict(self) -> Dict[str, Any]:
         return {"symbol": self.symbol, "side": self.side, "entry": self.entry, "sl": self.sl,
                 "tp": self.tp, "rr": round(self.rr, 2), "confluence": self.confluence,
-                "reasons": self.reasons, "time": self.time.isoformat() if self.time else None}
+                "reasons": self.reasons, "tp1": self.tp1, "score": round(self.score, 2), "time": self.time.isoformat() if self.time else None}

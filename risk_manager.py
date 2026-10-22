@@ -66,7 +66,23 @@ class RiskManager:
 
     def check_rr(self, entry: float, sl: float, tp: float) -> bool:
         risk = abs(entry - sl)
-        return risk > 0 and abs(tp - entry) / risk >= self.cfg.min_rr - 1e-9
+        if risk <= 0:
+            return False
+        rr = abs(tp - entry) / risk
+        if self.cfg.scalp_mode:
+            return self.cfg.min_rr_scalp - 1e-9 <= rr <= self.cfg.max_rr_scalp + 1e-9
+        return rr >= self.cfg.min_rr - 1e-9
+
+    def split_lots(self, lots: float, spec: SymbolSpec) -> Tuple[float, float]:
+        """Split a position into (first-TP leg, runner leg); runner is 0 if it can't be split."""
+        ratio = self.cfg.partial_tp_ratio
+        if not self.cfg.scalp_mode or not 0 < ratio < 1:
+            return lots, 0.0
+        first = int(lots * ratio / spec.lot_step + 1e-9) * spec.lot_step
+        rest = round(lots - first, 8)
+        if first < spec.min_lot or rest < spec.min_lot:
+            return lots, 0.0
+        return round(first, 8), rest
 
     # ---- sizing ----------------------------------------------------------------
     def position_size(self, equity: float, entry: float, sl: float, spec: SymbolSpec) -> float:

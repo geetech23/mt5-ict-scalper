@@ -6,7 +6,7 @@ from typing import Optional, Sequence, Tuple
 from brokers.base_connector import BaseConnector
 from config import Config
 from ict.analyzer import ICTAnalyzer
-from ict.signals import SignalGenerator
+from ict.signals import ScalpSignalGenerator, SignalGenerator
 from ict.structures import Candle, Direction, ICTAnalysis, Signal
 from utils.logger import get_logger
 
@@ -23,7 +23,14 @@ def evaluate(cfg: Config, symbol: str, pip: float, ltf: Sequence[Candle],
     """Pure function (no I/O) shared by live trading and backtesting."""
     analyzer = build_analyzer(cfg, pip)
     analysis = analyzer.analyze(ltf, symbol)
-    htf_trend = analyzer.analyze(htf, symbol).trend if htf else None
+    htf_analysis = analyzer.analyze(htf, symbol) if htf else None
+    htf_trend = htf_analysis.trend if htf_analysis else None
+    if cfg.scalp_mode:
+        sgen = ScalpSignalGenerator(cfg, pip)
+        sig = sgen.generate(ltf, analysis, htf_trend, htf, htf_analysis)
+        if not sig and sgen.rejections:
+            log.info("Scalp filters rejected %s: %s", symbol, " | ".join(sgen.rejections))
+        return analysis, sig
     gen = SignalGenerator(pip, cfg.min_confluence, cfg.min_rr)
     return analysis, gen.generate(ltf, analysis, htf_trend)
 

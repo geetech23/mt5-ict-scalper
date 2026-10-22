@@ -68,3 +68,14 @@ python -m pytest
 The TradeLocker connector uses the official `tradelocker` package (REST polling; WebSocket streaming is not
 implemented). Verify it against a demo account before going live. To add a broker, subclass `BaseConnector`
 and register it in `brokers/__init__.py`.
+
+## Scalp mode (multi-timeframe confirmation)
+
+Opt-in via `SCALP_MODE=true` (default off = original behaviour). When on, entries require HTF
+trend + recent HTF break/sweep + HTF momentum, a liquidity sweep within `RECENT_SWEEP_BARS`, a strong
+non-indecision entry candle, an unmitigated OB or recent FVG, confluence >= `MIN_CONFLUENCE_SCALP` (3),
+SL <= `MAX_SL_PIPS_SCALP`, RR within `MIN_RR_SCALP`..`MAX_RR_SCALP` (1.5-3), and a non-choppy market
+(`MIN_ATR_RATIO`, `MIN_RANGE_PIPS`). Positions are split in two legs (`PARTIAL_TP_RATIO`): leg 1 exits at 1R,
+then the runner's SL moves to entry + 1 pip; at 2R the SL locks in 1R. Rejection reasons are logged.
+Recommended M5 start: `TIMEFRAME=M5 HTF_TIMEFRAME=M15 SCALP_MODE=true SCALP_TP_PIPS=12`.
+Compare before/after with `backtest.py` by toggling `SCALP_MODE`.
