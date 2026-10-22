@@ -50,6 +50,7 @@ class Backtester:
             c = candles[i]
             if c.time.date() != day:
                 day, day_pnl, day_losses = c.time.date(), 0.0, 0
+                risk.start_day(balance, c.time)
             if open_t:
                 hit = self._check_exit(open_t, c)
                 if hit:
@@ -61,8 +62,10 @@ class Backtester:
                     day_pnl += open_t.pnl
                     day_losses = day_losses + 1 if open_t.pnl <= 0 else 0
                     trades.append(open_t)
-                    open_t = None
+                    open_t_pnl, open_t = open_t.pnl, None
                     equity_curve.append(balance)
+                    risk.record_trade(open_t_pnl, c.time)
+                    risk.update_equity(balance, c.time)
             if open_t or i + 1 >= len(candles):
                 continue
             active = self.sessions.tradable_sessions(symbol, c.time)
@@ -71,7 +74,7 @@ class Backtester:
             key = self.sessions.session_key(active[0], c.time)
             if sess_counts.get(key, 0) >= self.cfg.max_trades_per_session:
                 continue
-            if day_losses >= self.cfg.max_consecutive_losses or day_pnl <= -balance * self.cfg.daily_loss_limit_pct / 100:
+            if day_pnl <= -balance * self.cfg.daily_loss_limit_pct / 100 or not risk.can_trade(now=c.time)[0]:
                 continue
             lo = max(0, i + 1 - self.window)
             htf = [h for h in htf_candles if h.time <= c.time][-100:] if htf_candles else None

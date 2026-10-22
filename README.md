@@ -68,3 +68,16 @@ python -m pytest
 The TradeLocker connector uses the official `tradelocker` package (REST polling; WebSocket streaming is not
 implemented). Verify it against a demo account before going live. To add a broker, subclass `BaseConnector`
 and register it in `brokers/__init__.py`.
+
+## Adaptive risk management
+
+Risk per trade scales with realized daily growth: 1.0% (<5%), 1.25% (5-10%), 1.5% (10-15%), and new
+entries stop at +15%. Escalation requires >50% win rate, positive expectancy and no peak drawdown over
+the day's closed trades (`GATE_MIN_TRADES`). Modes: `NORMAL`, `REDUCED` (0.5% after equity falls 2% from the
+daily peak until `RECOVERY_TRADES` net-positive closed trades), `ELEVATED` (1.5%). The hard daily loss
+limit (`DAILY_LOSS_LIMIT_PCT`, default 3%, realized + floating) overrides everything, and open risk is
+capped by `MAX_AGGREGATE_RISK_PCT`. Consecutive losses are only logged as warnings (`MAX_CONSECUTIVE_LOSSES`)
+- trading is never paused. All thresholds are in `config.py` / `.env` (see `RISK_*`, `DRAWDOWN_FROM_PEAK_PCT`, etc.).
+
+Backtest: run `Backtester` (`backtest.py`) on candle data with `ADAPTIVE_RISK=true` vs `false` and compare
+profit factor, drawdown and expectancy; validate on a demo account before going live.

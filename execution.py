@@ -47,8 +47,13 @@ class ExecutionEngine:
         if self.has_open(sig.symbol):
             return None
         spec = self.conn.get_symbol_spec(sig.symbol)
-        lots = self.risk.position_size(self.conn.get_account().equity, sig.entry, sig.sl, spec)
+        equity = self.conn.get_account().equity
+        lots = self.risk.position_size(equity, sig.entry, sig.sl, spec)
         if lots <= 0:
+            return None
+        risk_amt = lots * (abs(sig.entry - sig.sl) / spec.pip_size + self.cfg.risk_cost_buffer_pips) * spec.pip_value_per_lot
+        if not self.risk.within_aggregate_cap(risk_amt, equity):
+            log.warning("⚠️ Trade blocked: aggregate open risk would exceed %.1f%% cap", self.cfg.max_aggregate_risk_pct)
             return None
         try:
             validate_order(sig.side, lots, sig.sl, sig.tp, sig.entry)
@@ -60,6 +65,7 @@ class ExecutionEngine:
             log.error("❌ Order rejected for %s", sig.symbol)
             return None
         reason = "; ".join(sig.reasons)
+        self.risk.register_open_risk(pid, risk_amt)
         self.meta[pid] = TradeMeta(sig.symbol, sig.side, sig.entry, sig.sl, sig.tp, reason)
         if session_key:
             self.risk.record_entry(session_key)
@@ -102,6 +108,7 @@ class ExecutionEngine:
     def _on_closed(self, pid: str, m: TradeMeta) -> None:
         res = self.conn.closed_result(pid)
         exit_price, pnl = res if res else (m.last_price, m.last_profit)
+        self.risk.release_open_risk(pid)
         self.risk.record_trade(pnl)
         reason = "TP/SL hit" if res else "closed (last known)"
         self.journal.record("CLOSE", m.symbol, m.side, m.entry, m.initial_sl, m.tp,

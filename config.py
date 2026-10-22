@@ -72,11 +72,26 @@ class Config:
     session_hours: Dict[str, tuple] = field(default_factory=dict)
     session_symbols: Dict[str, List[str]] = field(default_factory=dict)
     # Risk
-    risk_per_trade_pct: float = 10.0
+    risk_per_trade_pct: float = 1.0  # base risk; start-of-day tier when adaptive_risk is on
     position_size_multiplier: float = 1.0
     min_rr: float = 2.0
-    daily_loss_limit_pct: float = 5.0
-    max_consecutive_losses: int = 3
+    daily_loss_limit_pct: float = 3.0  # hard daily stop (realized + floating), overrides everything
+    max_consecutive_losses: int = 3  # warning-only threshold: never pauses or blocks trading
+    # Adaptive compounding / dynamic risk (see risk_manager.py)
+    adaptive_risk: bool = True
+    daily_profit_target_pct: float = 15.0  # no NEW trades once realized growth reaches this
+    risk_tier1_growth_pct: float = 5.0
+    risk_tier1_pct: float = 1.25
+    risk_tier2_growth_pct: float = 10.0
+    risk_tier2_pct: float = 1.5
+    max_normal_risk_pct: float = 1.5
+    reduced_risk_pct: float = 0.5
+    drawdown_from_peak_pct: float = 2.0  # equity drop from daily peak that triggers REDUCED
+    recovery_trades: int = 3  # closed trades (net-positive) needed in REDUCED before risk can rise again
+    gate_min_trades: int = 3  # closed trades today needed before risk may escalate
+    gate_min_win_rate: float = 0.5  # escalation needs win rate strictly above this
+    max_aggregate_risk_pct: float = 3.0  # cap on summed open-position risk
+    risk_cost_buffer_pips: float = 0.0  # extra pips (spread/slippage) added to SL distance when sizing
     max_trades_per_session: int = 5
     breakeven_r: float = 1.0
     trailing_r: float = 1.5
@@ -118,11 +133,25 @@ class Config:
             enabled_sessions=_list("ENABLED_SESSIONS", "LONDON,NY,ASIA"),
             session_hours=hours,
             session_symbols=session_symbols,
-            risk_per_trade_pct=_float("RISK_PER_TRADE_PCT", 10.0),
+            risk_per_trade_pct=_float("RISK_PER_TRADE_PCT", 1.0),
             position_size_multiplier=_float("POSITION_SIZE_MULTIPLIER", 1.0),
             min_rr=_float("MIN_RR", 2.0),
-            daily_loss_limit_pct=_float("DAILY_LOSS_LIMIT_PCT", 5.0),
+            daily_loss_limit_pct=_float("DAILY_LOSS_LIMIT_PCT", 3.0),
             max_consecutive_losses=_int("MAX_CONSECUTIVE_LOSSES", 3),
+            adaptive_risk=_bool("ADAPTIVE_RISK", True),
+            daily_profit_target_pct=_float("DAILY_PROFIT_TARGET_PCT", 15.0),
+            risk_tier1_growth_pct=_float("RISK_TIER1_GROWTH_PCT", 5.0),
+            risk_tier1_pct=_float("RISK_TIER1_PCT", 1.25),
+            risk_tier2_growth_pct=_float("RISK_TIER2_GROWTH_PCT", 10.0),
+            risk_tier2_pct=_float("RISK_TIER2_PCT", 1.5),
+            max_normal_risk_pct=_float("MAX_NORMAL_RISK_PCT", 1.5),
+            reduced_risk_pct=_float("REDUCED_RISK_PCT", 0.5),
+            drawdown_from_peak_pct=_float("DRAWDOWN_FROM_PEAK_PCT", 2.0),
+            recovery_trades=_int("RECOVERY_TRADES", 3),
+            gate_min_trades=_int("GATE_MIN_TRADES", 3),
+            gate_min_win_rate=_float("GATE_MIN_WIN_RATE", 0.5),
+            max_aggregate_risk_pct=_float("MAX_AGGREGATE_RISK_PCT", 3.0),
+            risk_cost_buffer_pips=_float("RISK_COST_BUFFER_PIPS", 0.0),
             max_trades_per_session=_int("MAX_TRADES_PER_SESSION", 5),
             breakeven_r=_float("BREAKEVEN_R", 1.0),
             trailing_r=_float("TRAILING_R", 1.5),

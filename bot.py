@@ -6,7 +6,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from brokers.base_connector import BaseConnector
-from config import Config
+from config import LOG_DIR, Config
 from execution import ExecutionEngine
 from ict.structures import ICTAnalysis, Signal
 from journal import Journal
@@ -17,6 +17,7 @@ from utils.logger import get_logger
 from utils.time_utils import utc_now
 
 log = get_logger("bot")
+RISK_STATE_PATH = LOG_DIR / "risk_state.json"
 
 
 class TradingBot:
@@ -42,6 +43,7 @@ class TradingBot:
         self._stop.set()
 
     def run(self) -> None:
+        self.risk.load_state(RISK_STATE_PATH)
         if not self.conn.is_connected() and not self.conn.connect():
             log.error("❌ Could not connect to broker")
         log.info("🚀 Bot started | broker=%s sessions=%s symbols=%s", self.conn.name,
@@ -59,7 +61,11 @@ class TradingBot:
     def tick(self) -> None:
         now = utc_now()
         acct = self.conn.get_account()
-        self.risk.start_day(acct.equity)
+        self.risk.update_equity(acct.equity)
+        try:
+            self.risk.save_state(RISK_STATE_PATH)
+        except OSError as exc:
+            log.warning("Could not persist risk state: %s", exc)
         positions = self.exec.manage()
         with self._lock:
             self._account = {"balance": acct.balance, "equity": acct.equity, "currency": acct.currency}
@@ -91,6 +97,8 @@ class TradingBot:
                 "journal": self.journal.recent_trades(20),
                 "risk": {"daily_pnl": round(self.risk.daily_pnl, 2),
                          "consecutive_losses": self.risk.consecutive_losses,
+                         "mode": self.risk.mode.value,
+                         "risk_pct": self.risk.current_risk_pct(),
                          "trading_allowed": trading_ok, "reason": why}}
 
     @staticmethod
