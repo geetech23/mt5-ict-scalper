@@ -26,6 +26,8 @@ class TradeMeta:
     last_price: float = 0.0
     last_profit: float = 0.0
     breakeven_done: bool = False
+    group: str = ""  # legs of one scalp (partial TP) share a group id
+    first_leg: bool = False
 
 
 class ExecutionEngine:
@@ -55,12 +57,24 @@ class ExecutionEngine:
         except ValueError as exc:
             log.error("❌ Invalid order: %s", exc)
             return None
-        pid = self.conn.place_order(sig.symbol, sig.side, lots, sig.sl, sig.tp)
+        first_lots, run_lots = (lots, 0.0)
+        if sig.tp1 is not None:
+            first_lots, run_lots = self.risk.split_lots(lots, spec)
+        first_tp = sig.tp1 if run_lots > 0 and sig.tp1 is not None else sig.tp
+        pid = self.conn.place_order(sig.symbol, sig.side, first_lots, sig.sl, first_tp)
         if not pid:
             log.error("❌ Order rejected for %s", sig.symbol)
             return None
         reason = "; ".join(sig.reasons)
-        self.meta[pid] = TradeMeta(sig.symbol, sig.side, sig.entry, sig.sl, sig.tp, reason)
+        group = pid if run_lots > 0 else ""
+        self.meta[pid] = TradeMeta(sig.symbol, sig.side, sig.entry, sig.sl, first_tp, reason,
+                                   group=group, first_leg=run_lots > 0)
+        if run_lots > 0:
+            rid = self.conn.place_order(sig.symbol, sig.side, run_lots, sig.sl, sig.tp)
+            if rid:
+                self.meta[rid] = TradeMeta(sig.symbol, sig.side, sig.entry, sig.sl, sig.tp, reason, group=group)
+            else:
+                log.warning("Runner leg rejected for %s; first leg keeps TP1", sig.symbol)
         if session_key:
             self.risk.record_entry(session_key)
         self.journal.record("OPEN", sig.symbol, sig.side, sig.entry, sig.sl, sig.tp, reason=reason)
@@ -87,22 +101,44 @@ class ExecutionEngine:
         buy = m.side == "buy"
         gain = (p.current_price - m.entry) if buy else (m.entry - p.current_price)
         new_sl: Optional[float] = None
-        if gain >= self.cfg.trailing_r * risk:
+        pip = self.conn.get_symbol_spec(m.symbol).pip_size
+        be = (m.entry + pip if buy else m.entry - pip) if self.cfg.scalp_mode else m.entry
+        if self.cfg.scalp_mode and self.cfg.scalp_trail_momentum and gain >= 2 * risk:
+            cand = m.entry + risk if buy else m.entry - risk  # lock in 1R once price runs to 2R
+            if (buy and cand > p.sl) or (not buy and cand < p.sl):
+                new_sl = cand
+        elif gain >= self.cfg.trailing_r * risk:
             cand = p.current_price - risk if buy else p.current_price + risk
             if (buy and cand > p.sl) or (not buy and cand < p.sl):
                 new_sl = cand
         elif gain >= self.cfg.breakeven_r * risk and not m.breakeven_done:
-            if (buy and p.sl < m.entry) or (not buy and p.sl > m.entry):
-                new_sl = m.entry
+            if (buy and p.sl < be) or (not buy and p.sl > be):
+                new_sl = be
         if new_sl is not None and self.conn.modify_position(p.id, sl=new_sl):
             m.breakeven_done = True
             self.journal.record("MODIFY", m.symbol, m.side, sl=round(new_sl, 5), reason="breakeven/trail")
             log.info("🔒 %s SL moved to %.5f", m.symbol, new_sl)
 
+    def _protect_runner(self, closed: TradeMeta) -> None:
+        """First scalp leg hit TP1: move the runner's SL to entry + 1 pip."""
+        pip = self.conn.get_symbol_spec(closed.symbol).pip_size
+        buy = closed.side == "buy"
+        be = closed.entry + pip if buy else closed.entry - pip
+        live = {p.id: p for p in self.conn.get_positions()}
+        for pid, m in self.meta.items():
+            p = live.get(pid)
+            if m.group == closed.group and not m.first_leg and p is not None and \
+                    ((buy and p.sl < be) or (not buy and p.sl > be)) and self.conn.modify_position(pid, sl=be):
+                m.breakeven_done = True
+                self.journal.record("MODIFY", m.symbol, m.side, sl=round(be, 5), reason="TP1 hit: runner to BE+1pip")
+                log.info("🔒 %s runner SL moved to %.5f", m.symbol, be)
+
     def _on_closed(self, pid: str, m: TradeMeta) -> None:
         res = self.conn.closed_result(pid)
         exit_price, pnl = res if res else (m.last_price, m.last_profit)
         self.risk.record_trade(pnl)
+        if m.first_leg and pnl > 0:
+            self._protect_runner(m)
         reason = "TP/SL hit" if res else "closed (last known)"
         self.journal.record("CLOSE", m.symbol, m.side, m.entry, m.initial_sl, m.tp,
                             round(exit_price, 5), round(pnl, 2), reason)
