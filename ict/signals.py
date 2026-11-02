@@ -33,7 +33,7 @@ class SignalGenerator:
         price = last.close
         since = a.last_index - self.recent
         bull = d == Direction.BULLISH
-        if htf in (Direction.BULLISH, Direction.BEARISH) and htf != d:
+        if htf is not None and htf != d:  # trade only with a clear higher-timeframe trend
             return None
         reasons: List[str] = []
         stops: List[float] = []
@@ -60,6 +60,9 @@ class SignalGenerator:
             reasons.append(f"Price in {d.value} FVG {fvgs[-1].bottom:.5f}-{fvgs[-1].top:.5f}")
             stops.append(fvgs[-1].bottom if bull else fvgs[-1].top)
 
+        # Need a sweep or structure break (the trigger) plus a zone (the location).
+        if not (sweeps or brks) or not (obs or fvgs):
+            return None
         # A zone/sweep is required so a stop can be placed; structure alone is not an entry.
         if not stops or len(reasons) < self.min_confluence:
             return None

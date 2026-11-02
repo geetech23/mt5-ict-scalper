@@ -43,3 +43,4 @@ def test_consecutive_losses_and_session_cap():
     rm.record_trade(-1)
     assert not rm.can_trade()[0]
     rm.record_trade(5)
+
