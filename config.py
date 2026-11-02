@@ -9,6 +9,7 @@ from typing import Dict, List
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / ".env"
 LOG_DIR = BASE_DIR / "logs"
+MAX_RISK_PER_TRADE_PCT = 2.0  # hard cap so a bad .env cannot blow up the account
 
 
 def load_env(path: Path = ENV_PATH) -> None:
@@ -68,16 +69,16 @@ class Config:
     symbols: List[str] = field(default_factory=lambda: ["EURUSD"])
     timeframe: str = "M5"
     htf_timeframe: str = "M15"
-    enabled_sessions: List[str] = field(default_factory=lambda: ["LONDON", "NY", "ASIA"])
+    enabled_sessions: List[str] = field(default_factory=lambda: ["LONDON", "NY"])
     session_hours: Dict[str, tuple] = field(default_factory=dict)
     session_symbols: Dict[str, List[str]] = field(default_factory=dict)
     # Risk
-    risk_per_trade_pct: float = 10.0
+    risk_per_trade_pct: float = 1.0
     position_size_multiplier: float = 1.0
     min_rr: float = 2.0
     daily_loss_limit_pct: float = 5.0
-    max_consecutive_losses: int = 3
-    max_trades_per_session: int = 5
+    max_consecutive_losses: int = 2
+    max_trades_per_session: int = 3
     breakeven_r: float = 1.0
     trailing_r: float = 1.5
     # ICT
@@ -85,7 +86,7 @@ class Config:
     fvg_min_pips: float = 1.0
     ob_impulse_atr: float = 1.5
     equal_level_tolerance_pips: float = 2.0
-    min_confluence: int = 2
+    min_confluence: int = 3
     # Dashboard
     dashboard_host: str = "127.0.0.1"
     dashboard_port: int = 8080
@@ -115,22 +116,22 @@ class Config:
             symbols=symbols,
             timeframe=_get("TIMEFRAME", "M5").upper(),
             htf_timeframe=_get("HTF_TIMEFRAME", "M15").upper(),
-            enabled_sessions=_list("ENABLED_SESSIONS", "LONDON,NY,ASIA"),
+            enabled_sessions=_list("ENABLED_SESSIONS", "LONDON,NY"),
             session_hours=hours,
             session_symbols=session_symbols,
-            risk_per_trade_pct=_float("RISK_PER_TRADE_PCT", 10.0),
+            risk_per_trade_pct=min(_float("RISK_PER_TRADE_PCT", 1.0), MAX_RISK_PER_TRADE_PCT),
             position_size_multiplier=_float("POSITION_SIZE_MULTIPLIER", 1.0),
             min_rr=_float("MIN_RR", 2.0),
             daily_loss_limit_pct=_float("DAILY_LOSS_LIMIT_PCT", 5.0),
-            max_consecutive_losses=_int("MAX_CONSECUTIVE_LOSSES", 3),
-            max_trades_per_session=_int("MAX_TRADES_PER_SESSION", 5),
+            max_consecutive_losses=_int("MAX_CONSECUTIVE_LOSSES", 2),
+            max_trades_per_session=_int("MAX_TRADES_PER_SESSION", 3),
             breakeven_r=_float("BREAKEVEN_R", 1.0),
             trailing_r=_float("TRAILING_R", 1.5),
             swing_lookback=_int("SWING_LOOKBACK", 3),
             fvg_min_pips=_float("FVG_MIN_PIPS", 1.0),
             ob_impulse_atr=_float("OB_IMPULSE_ATR", 1.5),
             equal_level_tolerance_pips=_float("EQUAL_LEVEL_TOLERANCE_PIPS", 2.0),
-            min_confluence=_int("MIN_CONFLUENCE", 2),
+            min_confluence=_int("MIN_CONFLUENCE", 3),
             dashboard_host=_get("DASHBOARD_HOST", "127.0.0.1"),
             dashboard_port=_int("DASHBOARD_PORT", 8080),
             open_browser=_bool("OPEN_BROWSER", True),

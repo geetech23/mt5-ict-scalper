@@ -36,6 +36,7 @@ class TradingBot:
         self._account: Dict[str, Any] = {}
         self._positions: List[Dict[str, Any]] = []
         self._last_scan: Dict[str, float] = {}
+        self._last_sig_time: Dict[str, Any] = {}
         self._tf_seconds = max(30.0, self.poll * 6)
 
     def stop(self) -> None:
@@ -74,7 +75,8 @@ class TradingBot:
             analysis, sig = self.strategy.scan(symbol)
             with self._lock:
                 self._analyses[symbol], self._signals[symbol] = analysis, sig
-            if sig:
+            if sig and sig.time != self._last_sig_time.get(symbol):  # one entry per candle
+                self._last_sig_time[symbol] = sig.time
                 key = self.sessions.session_key(tradable[0], now)
                 self.exec.enter(sig, key)
 
